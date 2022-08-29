@@ -110,13 +110,85 @@ function f_mpx_vac(du, u, p, t, Λ, B, N_msm, N_grp_msm, N_total)
     return nothing
 end
 
+
+
 """
     function mpx_sim_function_chp(params, constants, wkly_cases)
 
 Simulation function for the MPX transmission model with change points. Outputs the relative L1 error for ABC inference, 
-    and detected cases (for saving).        
+    and saves no data from simulation.        
 """
 function mpx_sim_function_chp(params, constants, wkly_cases)
+    #Get constant data
+    N_total, N_msm, ps, ms, ingroup, ts, α_incubation, n_cliques, wkly_vaccinations, vac_effectiveness, chp_t2 = constants
+
+    #Get parameters and make transformations
+    α_choose, p_detect, mean_inf_period, p_trans, R0_other, M, init_scale, chp_t, trans_red, trans_red_other, scale_trans_red2, scale_red_other2 = params
+    p_γ = 1 / (1 + mean_inf_period)
+    γ_eff = -log(1 - p_γ) #get recovery rate
+    trans_red2 = trans_red * scale_trans_red2
+    trans_red_other2 = scale_trans_red2 * scale_red_other2
+    #Generate random population structure
+    u0_msm, u0_other, N_clique, N_grp_msm = setup_initial_state(N_total, N_msm, α_choose, p_detect, α_incubation, ps, init_scale; n_states=9, n_cliques=n_cliques)
+    Λ, B = setup_transmission_matrix(ms, ps, N_clique; ingroup=ingroup)
+
+    #Simulate and track error
+    L1_rel_err = 0.0
+    total_cases = sum(wkly_cases[1:(end-1), :])
+    u_mpx = ArrayPartition(u0_msm, u0_other)
+    prob = DiscreteProblem((du, u, p, t) -> f_mpx_vac(du, u, p, t, Λ, B, N_msm, N_grp_msm, N_total),
+        u_mpx, (ts[1] - 7, ts[1] - 7 + 7 * size(wkly_cases, 1)),#lag for week before detection
+        [p_trans, R0_other, γ_eff, α_incubation, vac_effectiveness])
+    mpx_init = init(prob, FunctionMap(), save_everystep=false) #Begins week 1
+    old_onsets = [0, 0]
+    new_onsets = [0, 0]
+    wk_num = 1
+    not_changed = true
+    not_changed2 = true
+
+    while wk_num <= size(wkly_cases, 1)
+        if not_changed && mpx_init.t > chp_t ##Change point for transmission
+            not_changed = false
+            mpx_init.p[1] = mpx_init.p[1] * (1 - trans_red) #Reduce transmission per sexual contact after the change point
+            mpx_init.p[2] = mpx_init.p[2] * (1 - trans_red_other) #Reduce transmission per non-sexual contact after the change point
+        end
+        if not_changed2 && mpx_init.t > chp_t2 ##2nd change point for transmission 
+            not_changed2 = false
+            mpx_init.p[1] = mpx_init.p[1] * (1 - trans_red2) #Reduce sexual MSM transmission after the change point
+            mpx_init.p[2] = mpx_init.p[2] * (1 - trans_red_other2) #Reduce  other transmission after the change point
+        end
+        step!(mpx_init, 7)#Step forward a week
+
+        #Do vaccine uptake
+        nv = wkly_vaccinations[wk_num]#Mean number of vaccines deployed
+        du_vac = deepcopy(mpx_init.u)
+        vac_rate = nv .* du_vac.x[1][1, 3:end, :] / (sum(du_vac.x[1][1, 3:end, :]) .+ 1e-5)
+        num_vaccines = map((μ, maxval) -> min(rand(Poisson(μ)), maxval), vac_rate, du_vac.x[1][1, 3:end, :])
+        du_vac.x[1][1, 3:end, :] .-= num_vaccines
+        du_vac.x[1][8, 3:end, :] .+= num_vaccines
+        set_u!(mpx_init, du_vac) #Change the state of the model
+
+        #Calculate actual onsets, generate observed cases and score errors        
+        new_onsets = [sum(mpx_init.u.x[1][end, :, :]), mpx_init.u.x[2][end]]
+        actual_obs = [rand(BetaBinomial(new_onsets[1] - old_onsets[1], p_detect * M, (1 - p_detect) * M)), rand(BetaBinomial(new_onsets[2] - old_onsets[2], p_detect * M, (1 - p_detect) * M))]
+        if wk_num < size(wkly_cases, 1)  # Leave last week out for cross-validation and possible right censoring issues
+            L1_rel_err += sum(abs, actual_obs .- wkly_cases[wk_num, :]) / total_cases #lag 1 week
+        end
+        wk_num += 1
+        old_onsets = new_onsets
+    end
+
+    return L1_rel_err, nothing
+end
+
+
+"""
+    function mpx_sim_function_chp(params, constants, wkly_cases,::Val{:save})
+
+Simulation function for the MPX transmission model with change points. Outputs the relative L1 error for ABC inference, 
+    and saves detected cases for accepted ABC particles.        
+"""
+function mpx_sim_function_chp(params, constants, wkly_cases,::Val{:save})
     #Get constant data
     N_total, N_msm, ps, ms, ingroup, ts, α_incubation, n_cliques, wkly_vaccinations, vac_effectiveness, chp_t2 = constants
 
@@ -180,6 +252,7 @@ function mpx_sim_function_chp(params, constants, wkly_cases)
 
     return L1_rel_err, detected_cases
 end
+
 
 """
     function mpx_sim_function_interventions(params, constants, wkly_cases, interventions)

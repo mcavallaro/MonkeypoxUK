@@ -10,7 +10,7 @@ function simulation_based_calibration(prior_vect, wks, mpxv_wkly, constants; sav
     end
     ## Prior predictive checking - simulation
     draws = [rand.(prior_vect) for i = 1:1000]
-    prior_sims = map(θ -> MonkeypoxUK.mpx_sim_function_chp(θ, constants, mpxv_wkly), draws)
+    prior_sims = map(θ -> MonkeypoxUK.mpx_sim_function_chp(θ, constants, mpxv_wkly,Val(:save)), draws)
 
     ##Prior predictive checking - simulation
     prior_preds = [sim[2] for sim in prior_sims]
@@ -26,7 +26,7 @@ function simulation_based_calibration(prior_vect, wks, mpxv_wkly, constants; sav
     if verbose
         println("Starting model-based calibration")
     end
-    mbc_errs = map(n -> MonkeypoxUK.mpx_sim_function_chp(draws[n], constants, prior_sims[n][2])[1], 1:1000)
+    mbc_errs = map(n -> MonkeypoxUK.mpx_sim_function_chp(draws[n], constants, prior_sims[n][2])[1], collect(1:1000))
 
     ##Find target tolerance and plot error distribution
     ϵ_target = find_zero(x -> target_perc - sum(mbc_errs .< x) / length(mbc_errs), (0, 5))
@@ -41,6 +41,29 @@ function simulation_based_calibration(prior_vect, wks, mpxv_wkly, constants; sav
         savefig(err_hist, "plots/mbc_error_calibration_plt" * string(wks[end]) * ".png")
     end
     return ϵ_target, plt_priorpredcheck, err_hist
+end
+
+"""
+    function simulation_based_calibration(prior_vect, wks, mpxv_wkly, constants, ::Val{nofigures}; target_perc=0.05)
+
+Only run model-based calibration of errors at a target with no plotting for 
+    percentile error `target_perc` (default = 5%), and return as `ϵ_target`.        
+"""
+function simulation_based_calibration(prior_vect, wks, mpxv_wkly, constants, ::Val{:nofigures}; target_perc=0.05)
+    ## Prior predictive simulation
+    draws = [rand.(prior_vect) for i = 1:1000]
+    prior_sims = map(θ -> MonkeypoxUK.mpx_sim_function_chp(θ, constants, mpxv_wkly,Val(:save)), draws)
+
+    prior_preds = [sim[2] for sim in prior_sims]
+
+    ## Model-based calibration of target tolerance
+    
+    mbc_errs = map(n -> MonkeypoxUK.mpx_sim_function_chp(draws[n], constants, prior_sims[n][2])[1], collect(1:1000))
+
+    ##Find target tolerance and plot error distribution
+    ϵ_target = find_zero(x -> target_perc - sum(mbc_errs .< x) / length(mbc_errs), (0, 5))
+
+    return ϵ_target
 end
 
 function convert_to_chn(smc)
@@ -69,6 +92,4 @@ function convert_to_chn(smc)
     return chn
 end
 
-function load_smc(filename)
-    return load(filename)["smc_cng_pnt"]
-end
+

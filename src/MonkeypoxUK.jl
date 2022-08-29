@@ -3,7 +3,7 @@ module MonkeypoxUK
 using Distributions, StatsBase
 using LinearAlgebra, RecursiveArrayTools
 using OrdinaryDiffEq, StatsPlots, Plots.PlotMeasures
-using Roots, ApproxBayes, MCMCChains, JLD2, Dates
+using Roots, MCMCChains, Dates
 
 export mpx_sim_function_interventions,
         mpx_sim_function_chp,

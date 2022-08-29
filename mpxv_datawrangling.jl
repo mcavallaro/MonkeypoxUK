@@ -3,7 +3,7 @@ using CSV, DataFrames, Plots, Dates, Plots.PlotMeasures
 ##
 mpxv_data = CSV.File("data/mpxv_latest.csv") |> DataFrame
 UK_mpxv_data = mpxv_data[[c ∈ ["England", "Wales", "Scotland", "Northern Ireland"] for c in mpxv_data.Country], :]
-
+mpxv_data = 0
 #Find least missing date col
 sum(ismissing.(UK_mpxv_data.Date_confirmation)) # 0
 sum(ismissing.(UK_mpxv_data.Date_onset)) #2429
@@ -22,16 +22,17 @@ wks = sort(unique(first_day_wk_reported))
 mpxv_wkly = [sum(first_day_wk_reported .== wk) for wk in wks] .* [fill(reported_msm_prop[end,2],length(wks)) fill(1 - 0.965,length(wks))]
 
 #Plot data
-scatter(wks, mpxv_wkly, lab=["MSM" "non-MSM"],
-        title="Weekly reported MPXV cases",
-        ylabel="reported cases")
+# scatter(wks, mpxv_wkly, lab=["MSM" "non-MSM"],
+#         title="Weekly reported MPXV cases",
+#         ylabel="reported cases")
 
 ##Create daily report data
-days = minimum(unique(UK_mpxv_data.Date_confirmation)):Day(1):maximum(unique(UK_mpxv_data.Date_confirmation))
-mpxv_dly = [sum(UK_mpxv_data.Date_confirmation[idxs_confirmed] .== day) for day in days]
+# days = minimum(unique(UK_mpxv_data.Date_confirmation)):Day(1):maximum(unique(UK_mpxv_data.Date_confirmation))
+# mpxv_dly = [sum(UK_mpxv_data.Date_confirmation[idxs_confirmed] .== day) for day in days]
 #Plot data
-scatter(days, mpxv_dly, lab="",
-        title="Daily reported MPXV cases",
-        ylabel="reported cases")
+# scatter(days, mpxv_dly, lab="",
+#         title="Daily reported MPXV cases",
+#         ylabel="reported cases")
 
 ## approximate MSM
+UK_mpxv_data = 0
