@@ -7,7 +7,7 @@ using JLD2, MCMCChains, Roots
 using MonkeypoxUK
 
 ## Grab UK data
-function main()
+# function main()
 
 include("mpxv_datawrangling.jl");
 include("setup_model.jl");
@@ -38,19 +38,19 @@ setup_cng_pnt = ABCSMC(MonkeypoxUK.mpx_sim_function_chp, #simulation function
     ϵ1=1000,
     convergence=0.05,
     nparticles=2000,
-    α=0.5,
+    α=0.3,
     kernel=gaussiankernel,
     constants=constants,
-    maxiterations=10^10)
+    maxiterations=10^7)
 
 ##Run ABC    
 smc_cng_pnt = runabc(setup_cng_pnt, mpxv_wkly, verbose=true, progress=true)#, parallel=true)
 @save("posteriors/smc_posterior_draws_"*string(wks[end])*".jld2", smc_cng_pnt)
 param_draws = [particle.params for particle in smc_cng_pnt.particles]
 @save("posteriors/posterior_param_draws_"*string(wks[end])*".jld2", param_draws)
-end
+# end
 
-main()
+# main()
 ##posterior predictive checking - simple plot to see coherence of model with data
 
 
